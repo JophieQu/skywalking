@@ -19,7 +19,6 @@
 package org.apache.skywalking.oap.server.storage.plugin.banyandb.stream;
 
 import com.google.gson.Gson;
-import java.util.Objects;
 import javax.annotation.Nullable;
 import org.apache.skywalking.banyandb.model.v1.BanyandbModel;
 import org.apache.skywalking.banyandb.v1.client.AbstractCriteria;
@@ -139,29 +138,14 @@ public abstract class AbstractBanyanDBDAO extends AbstractDAO<BanyanDBStorageCli
         }
     }
 
-    protected TopNQueryResponse topN(MetadataRegistry.Schema schema,
-                                     TimestampRange timestampRange,
-                                     int number,
-                                     List<KeyValue> additionalConditions,
-                                     List<AttrCondition> attributes) throws IOException {
-        return topNQuery(schema, timestampRange, number, AbstractQuery.Sort.DESC, additionalConditions, attributes);
-    }
-
-    protected TopNQueryResponse bottomN(MetadataRegistry.Schema schema,
-                                        TimestampRange timestampRange,
-                                        int number,
-                                        List<KeyValue> additionalConditions,
-                                        List<AttrCondition> attributes) throws IOException {
-        return topNQuery(schema, timestampRange, number, AbstractQuery.Sort.ASC, additionalConditions, attributes);
-    }
-
     protected TopNQueryResponse topNQueryDebuggable(boolean isColdStage,
                                                     MetadataRegistry.Schema schema,
                                                     TimestampRange timestampRange,
                                                     int number,
                                                     AbstractQuery.Sort sort,
                                                     List<KeyValue> additionalConditions,
-                                                    List<AttrCondition> attributes) throws IOException {
+                                                    List<AttrCondition> attributes,
+                                                    String topNRuleName) throws IOException {
         DebuggingTraceContext traceContext = DebuggingTraceContext.TRACE_CONTEXT.get();
         DebuggingSpan span = null;
         try {
@@ -171,6 +155,8 @@ public abstract class AbstractBanyanDBDAO extends AbstractDAO<BanyanDBStorageCli
                 builder.append("Condition: ")
                        .append("Schema: ")
                        .append(schema)
+                       .append(", TopNRuleName: ")
+                       .append(topNRuleName)
                        .append(", TimestampRange: ")
                        .append(timestampRange)
                        .append(", Number: ")
@@ -185,7 +171,7 @@ public abstract class AbstractBanyanDBDAO extends AbstractDAO<BanyanDBStorageCli
                        .append(isColdStage);
                 span.setMsg(builder.toString());
             }
-            TopNQueryResponse response = topNQuery(schema, timestampRange, number, sort, additionalConditions, attributes);
+            TopNQueryResponse response = topNQuery(isColdStage, schema, timestampRange, number, sort, additionalConditions, attributes, topNRuleName);
             if (traceContext != null && traceContext.isDumpStorageRsp()) {
                 builder.append("\n").append(" Response: ").append(new Gson().toJson(response.getTopNLists()));
                 span.setMsg(builder.toString());
@@ -198,14 +184,16 @@ public abstract class AbstractBanyanDBDAO extends AbstractDAO<BanyanDBStorageCli
         }
     }
 
-    private TopNQueryResponse topNQuery(MetadataRegistry.Schema schema,
+    private TopNQueryResponse topNQuery(boolean isColdStage,
+                                        MetadataRegistry.Schema schema,
                                         TimestampRange timestampRange,
                                         int number,
                                         AbstractQuery.Sort sort,
                                         List<KeyValue> additionalConditions,
-                                        List<AttrCondition> attributes) throws IOException {
-        final TopNQuery q = new TopNQuery(List.of(schema.getMetadata().getGroup()), Objects.requireNonNull(
-            schema.getTopNSpec()).getMetadata().getName(),
+                                        List<AttrCondition> attributes,
+                                        String topNRuleName) throws IOException {
+        final TopNQuery q = new TopNQuery(List.of(schema.getMetadata().getGroup()),
+                                          topNRuleName,
                                           timestampRange,
                                           number, sort);
         q.setAggregationType(MeasureQuery.Aggregation.Type.MEAN);
@@ -219,12 +207,15 @@ public abstract class AbstractBanyanDBDAO extends AbstractDAO<BanyanDBStorageCli
             attributes.forEach(attr -> {
                 if (attr.isEquals()) {
                     conditions.add(PairQueryCondition.StringQueryCondition.eq(attr.getKey(), attr.getValue()));
-                } else {
-                    conditions.add(PairQueryCondition.StringQueryCondition.ne(attr.getKey(), attr.getValue()));
                 }
+                //server side topn query does not support not equals condition
+                //the not equals condition should be handled by a specific topN rule by adding exclude condition.
             });
         }
         q.setConditions(conditions);
+        if (isColdStage) {
+            q.setStages(List.of(BanyanDBStorageConfig.StageName.cold.name()));
+        }
 
         return getClient().query(q);
     }

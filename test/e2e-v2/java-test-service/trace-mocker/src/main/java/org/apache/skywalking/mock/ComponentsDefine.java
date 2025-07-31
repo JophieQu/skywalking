@@ -16,25 +16,20 @@
  *
  */
 
-//This is a health check proto, provided by gRPC team. Please don't change it.
-//https://github.com/grpc/grpc/blob/master/doc/health-checking.md
-syntax = "proto3";
+package org.apache.skywalking.mock;
 
-package grpc.health.v1;
+/**
+ * The supported list of skywalking java sniffer.
+ */
+public class ComponentsDefine {
 
-message HealthCheckRequest {
-    string service = 1;
-}
+    public static final OfficialComponent TOMCAT = new OfficialComponent(1, "Tomcat");
 
-message HealthCheckResponse {
-    enum ServingStatus {
-        UNKNOWN = 0;
-        SERVING = 1;
-        NOT_SERVING = 2;
-    }
-    ServingStatus status = 1;
-}
+    public static final OfficialComponent DUBBO = new OfficialComponent(3, "Dubbo");
 
-service Health {
-    rpc Check (HealthCheckRequest) returns (HealthCheckResponse);
+    public static final OfficialComponent ROCKET_MQ_PRODUCER = new OfficialComponent(38, "rocketMQ-producer");
+
+    public static final OfficialComponent ROCKET_MQ_CONSUMER = new OfficialComponent(39, "rocketMQ-consumer");
+
+    public static final OfficialComponent MONGO_DRIVER = new OfficialComponent(42, "mongodb-driver");
 }

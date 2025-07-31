@@ -150,6 +150,7 @@ public class DefaultScopeDefine {
     public static final int BROWSER_APP_WEB_VITALS_PAGE_PERF = 87;
     public static final int BROWSER_APP_RESOURCE_PERF = 88;
     public static final int BROWSER_APP_WEB_INTERACTION_PAGE_PERF = 89;
+    public static final int SW_SPAN_ATTACHED_EVENT = 90;
 
     public static final int PPROF_PROFILING_DATA = 90;
 
@@ -233,7 +234,7 @@ public class DefaultScopeDefine {
         if (virtualColumn != null) {
             scopeDefaultColumns.add(
                 new ScopeDefaultColumn(virtualColumn.fieldName(), virtualColumn.columnName(), virtualColumn
-                    .type(), virtualColumn.isID(), virtualColumn.length(), false, false));
+                    .type(), virtualColumn.isID(), virtualColumn.length(), -1, false));
         }
         Field[] scopeClassField = originalClass.getDeclaredFields();
         if (scopeClassField != null) {
@@ -242,16 +243,16 @@ public class DefaultScopeDefine {
                     ScopeDefaultColumn.DefinedByField.class);
                 ScopeDefaultColumn.BanyanDB banyanDB = field.getAnnotation(
                     ScopeDefaultColumn.BanyanDB.class);
-                boolean groupByCondInTopN = false;
+                int shardingKeyIdx = -1;
                 if (banyanDB != null) {
-                    groupByCondInTopN = banyanDB.groupByCondInTopN();
+                    shardingKeyIdx = banyanDB.shardingKeyIdx();
                 }
                 if (definedByField != null) {
                     if (!definedByField.requireDynamicActive() || ACTIVE_EXTRA_MODEL_COLUMNS) {
                         scopeDefaultColumns.add(
                             new ScopeDefaultColumn(
                                 field.getName(), definedByField.columnName(), field.getType(), false,
-                                definedByField.length(), groupByCondInTopN, definedByField.isAttribute()
+                                definedByField.length(), shardingKeyIdx, definedByField.isAttribute()
                             ));
                     }
                 }

@@ -26,10 +26,14 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.linecorp.armeria.common.AggregatedHttpResponse;
+import com.linecorp.armeria.common.HttpRequest;
 import com.linecorp.armeria.server.annotation.Default;
 import com.linecorp.armeria.server.annotation.ExceptionHandler;
 import com.linecorp.armeria.server.annotation.Get;
 import com.linecorp.armeria.server.annotation.Param;
+import com.linecorp.armeria.server.annotation.ProducesJson;
+import com.linecorp.armeria.server.annotation.ProducesText;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,7 +42,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.skywalking.oap.server.core.query.mqe.ExpressionResult;
 import org.apache.skywalking.oap.query.debug.log.DebuggingQueryLogsRsp;
 import org.apache.skywalking.oap.query.debug.mqe.DebuggingMQERsp;
 import org.apache.skywalking.oap.query.debug.topology.DebuggingQueryEndpointTopologyRsp;
@@ -67,6 +70,7 @@ import org.apache.skywalking.oap.server.core.query.input.Entity;
 import org.apache.skywalking.oap.server.core.query.input.LogQueryCondition;
 import org.apache.skywalking.oap.server.core.query.input.TraceQueryCondition;
 import org.apache.skywalking.oap.server.core.query.input.TraceScopeCondition;
+import org.apache.skywalking.oap.server.core.query.mqe.ExpressionResult;
 import org.apache.skywalking.oap.server.core.query.type.EndpointTopology;
 import org.apache.skywalking.oap.server.core.query.type.Logs;
 import org.apache.skywalking.oap.server.core.query.type.Pagination;
@@ -77,10 +81,11 @@ import org.apache.skywalking.oap.server.core.query.type.Topology;
 import org.apache.skywalking.oap.server.core.query.type.Trace;
 import org.apache.skywalking.oap.server.core.query.type.TraceBrief;
 import org.apache.skywalking.oap.server.core.query.type.TraceState;
-import org.apache.skywalking.oap.server.core.query.type.debugging.DebuggingTrace;
 import org.apache.skywalking.oap.server.core.query.type.debugging.DebuggingSpan;
+import org.apache.skywalking.oap.server.core.query.type.debugging.DebuggingTrace;
 import org.apache.skywalking.oap.server.core.query.type.debugging.DebuggingTraceContext;
 import org.apache.skywalking.oap.server.core.status.ServerStatusService;
+import org.apache.skywalking.oap.server.core.status.ServerStatusService.ConfigList;
 import org.apache.skywalking.oap.server.library.module.ModuleManager;
 import zipkin2.Span;
 
@@ -108,8 +113,10 @@ public class DebuggingHTTPHandler {
         this.logQuery = new LogQuery(manager);
     }
 
+    @ProducesText
+    @ProducesJson
     @Get("/debugging/config/dump")
-    public String dumpConfigurations() {
+    public ConfigList dumpConfigurations(HttpRequest request) {
         return serverStatusService.dumpBootingConfigurations(config.getKeywords4MaskingSecretsOfConfig());
     }
 
@@ -122,7 +129,7 @@ public class DebuggingHTTPHandler {
                                  @Param("step") String step,
                                  @Param("coldStage") Optional<Boolean> coldStage,
                                  @Param("service") String service,
-                                 @Param("serviceLayer") String serviceLayer,
+                                 @Param("serviceLayer") Optional<String> serviceLayer,
                                  @Param("serviceInstance") Optional<String> serviceInstance,
                                  @Param("endpoint") Optional<String> endpoint,
                                  @Param("process") Optional<String> process,
@@ -141,16 +148,22 @@ public class DebuggingHTTPHandler {
         entity.setDestServiceInstanceName(destServiceInstance.orElse(null));
         entity.setDestEndpointName(destEndpoint.orElse(null));
         entity.setDestProcessName(destProcess.orElse(null));
-        entity.setNormal(Layer.nameOf(serviceLayer).isNormal());
-        destServiceLayer.ifPresent(layer -> {
-            entity.setDestNormal(Layer.nameOf(layer).isNormal());
-        });
+
+        serviceLayer.ifPresentOrElse(
+            s -> entity.setNormal(Layer.nameOf(s).isNormal()),
+            () -> entity.setNormal(true)
+        );
+        destServiceLayer.ifPresentOrElse(
+            s -> entity.setDestNormal(Layer.nameOf(s).isNormal()),
+            () -> entity.setDestNormal(true)
+        );
         Duration duration = new Duration();
         duration.setStart(startTime);
         duration.setEnd(endTime);
         duration.setStep(Step.valueOf(step));
         coldStage.ifPresent(duration::setColdStage);
-        ExpressionResult expressionResult = mqeQuery.execExpression(expression, entity, duration, true, dumpStorageRsp).join();
+        ExpressionResult expressionResult = mqeQuery.execExpression(expression, entity, duration, true, dumpStorageRsp)
+                                                    .join();
         DebuggingTrace execTrace = expressionResult.getDebuggingTrace();
         DebuggingMQERsp result = new DebuggingMQERsp(
             expressionResult.getType(), expressionResult.getResults(), expressionResult.getError(),
@@ -179,8 +192,10 @@ public class DebuggingHTTPHandler {
                                    @Param("pageNum") int pageNum,
                                    @Param("pageSize") int pageSize
     ) {
+        // default to true if serviceLayer is not provided
+        final boolean isNormal = serviceLayer.map(s -> Layer.nameOf(s).isNormal()).orElse(true);
         Optional<String> serviceId = service.map(
-            name -> IDManager.ServiceID.buildId(name, Layer.nameOf(serviceLayer.orElseThrow()).isNormal()));
+            name -> IDManager.ServiceID.buildId(name, isNormal));
         Optional<String> serviceInstanceId = serviceInstance.map(
             name -> IDManager.ServiceInstanceID.buildId(serviceId.orElseThrow(), name));
         Optional<String> endpointId = endpoint.map(name -> IDManager.EndpointID.buildId(serviceId.orElseThrow(), name));
@@ -279,8 +294,10 @@ public class DebuggingHTTPHandler {
             );
             List<List<Span>> traces = new ArrayList<>();
             if (response.status().code() == 200) {
-                traces = new Gson().fromJson(response.contentUtf8(), new TypeToken<ArrayList<ArrayList<Span>>>() {
-                }.getType());
+                traces = new Gson().fromJson(
+                    response.contentUtf8(), new TypeToken<ArrayList<ArrayList<Span>>>() {
+                    }.getType()
+                );
             }
             DebuggingZipkinQueryTracesRsp result = new DebuggingZipkinQueryTracesRsp(
                 traces, transformTrace(traceContext.getExecTrace()));
@@ -300,11 +317,15 @@ public class DebuggingHTTPHandler {
             AggregatedHttpResponse response = zipkinQueryHandler.getTraceById(traceId);
             List<Span> trace = new ArrayList<>();
             if (response.status().code() == 200) {
-                trace = new Gson().fromJson(response.contentUtf8(), new TypeToken<ArrayList<Span>>() {
-                }.getType());
+                trace = new Gson().fromJson(
+                    response.contentUtf8(), new TypeToken<ArrayList<Span>>() {
+                    }.getType()
+                );
             }
-            DebuggingZipkinQueryTraceRsp result = new DebuggingZipkinQueryTraceRsp(trace, transformTrace(
-                traceContext.getExecTrace()));
+            DebuggingZipkinQueryTraceRsp result = new DebuggingZipkinQueryTraceRsp(
+                trace, transformTrace(
+                traceContext.getExecTrace())
+            );
             return transToYAMLStringZipkin(result);
         } finally {
             traceContext.stopTrace();
@@ -315,10 +336,10 @@ public class DebuggingHTTPHandler {
     @SneakyThrows
     @Get("/debugging/query/topology/getGlobalTopology")
     public String getGlobalTopology(@Param("startTime") String startTime,
-                                 @Param("endTime") String endTime,
-                                 @Param("step") String step,
-                                 @Param("coldStage") Optional<Boolean> coldStage,
-                                 @Param("serviceLayer") Optional<String> serviceLayer) {
+                                    @Param("endTime") String endTime,
+                                    @Param("step") String step,
+                                    @Param("coldStage") Optional<Boolean> coldStage,
+                                    @Param("serviceLayer") Optional<String> serviceLayer) {
         Duration duration = new Duration();
         duration.setStart(startTime);
         duration.setEnd(endTime);
@@ -333,18 +354,20 @@ public class DebuggingHTTPHandler {
     @SneakyThrows
     @Get("/debugging/query/topology/getServicesTopology")
     public String getServicesTopology(@Param("startTime") String startTime,
-                                    @Param("endTime") String endTime,
-                                    @Param("step") String step,
-                                    @Param("coldStage") Optional<Boolean> coldStage,
-                                    @Param("serviceLayer") String serviceLayer,
-                                    @Param("services") String services) {
+                                      @Param("endTime") String endTime,
+                                      @Param("step") String step,
+                                      @Param("coldStage") Optional<Boolean> coldStage,
+                                      @Param("serviceLayer") Optional<String> serviceLayer,
+                                      @Param("services") String services) {
         Duration duration = new Duration();
         duration.setStart(startTime);
         duration.setEnd(endTime);
         duration.setStep(Step.valueOf(step));
         coldStage.ifPresent(duration::setColdStage);
+        // default to true if serviceLayer is not provided
+        final boolean isNormal = serviceLayer.map(s -> Layer.nameOf(s).isNormal()).orElse(true);
         List<String> ids = Arrays.stream(services.split(Const.COMMA))
-                                 .map(name -> IDManager.ServiceID.buildId(name, Layer.nameOf(serviceLayer).isNormal()))
+                                 .map(name -> IDManager.ServiceID.buildId(name, isNormal))
                                  .collect(Collectors.toList());
         Topology topology = topologyQuery.getServicesTopology(ids, duration, true).join();
         DebuggingQueryServiceTopologyRsp result = new DebuggingQueryServiceTopologyRsp(
@@ -360,16 +383,19 @@ public class DebuggingHTTPHandler {
                                              @Param("coldStage") Optional<Boolean> coldStage,
                                              @Param("clientService") String clientService,
                                              @Param("serverService") String serverService,
-                                             @Param("clientServiceLayer") String clientServiceLayer,
-                                             @Param("serverServiceLayer") String serverServiceLayer) {
+                                             @Param("clientServiceLayer") Optional<String> clientServiceLayer,
+                                             @Param("serverServiceLayer") Optional<String> serverServiceLayer) {
         Duration duration = new Duration();
         duration.setStart(startTime);
         duration.setEnd(endTime);
         duration.setStep(Step.valueOf(step));
         coldStage.ifPresent(duration::setColdStage);
-        String clientServiceId = IDManager.ServiceID.buildId(clientService, Layer.nameOf(clientServiceLayer).isNormal());
-        String serverServiceId = IDManager.ServiceID.buildId(serverService, Layer.nameOf(serverServiceLayer).isNormal());
-        ServiceInstanceTopology topology = topologyQuery.getServiceInstanceTopology(clientServiceId, serverServiceId, duration, true).join();
+        String clientServiceId = IDManager.ServiceID.buildId(
+            clientService, clientServiceLayer.map(s -> Layer.nameOf(s).isNormal()).orElse(true));
+        String serverServiceId = IDManager.ServiceID.buildId(
+            serverService, serverServiceLayer.map(s -> Layer.nameOf(s).isNormal()).orElse(true));
+        ServiceInstanceTopology topology = topologyQuery.getServiceInstanceTopology(
+            clientServiceId, serverServiceId, duration, true).join();
         DebuggingQueryInstanceTopologyRsp result = new DebuggingQueryInstanceTopologyRsp(
             topology.getNodes(), topology.getCalls(), transformTrace(topology.getDebuggingTrace()));
         return transToYAMLString(result);
@@ -382,7 +408,7 @@ public class DebuggingHTTPHandler {
                                           @Param("step") String step,
                                           @Param("coldStage") Optional<Boolean> coldStage,
                                           @Param("service") String service,
-                                          @Param("serviceLayer") String serviceLayer,
+                                          @Param("serviceLayer") Optional<String> serviceLayer,
                                           @Param("endpoint") String endpoint) {
         Duration duration = new Duration();
         duration.setStart(startTime);
@@ -390,7 +416,9 @@ public class DebuggingHTTPHandler {
         duration.setStep(Step.valueOf(step));
         coldStage.ifPresent(duration::setColdStage);
         String endpointId = IDManager.EndpointID.buildId(
-            IDManager.ServiceID.buildId(service, Layer.nameOf(serviceLayer).isNormal()), endpoint);
+            IDManager.ServiceID.buildId(service, serviceLayer.map(s -> Layer.nameOf(s).isNormal()).orElse(true)),
+            endpoint
+        );
         EndpointTopology topology = topologyQuery.getEndpointDependencies(endpointId, duration, true).join();
         DebuggingQueryEndpointTopologyRsp result = new DebuggingQueryEndpointTopologyRsp(
             topology.getNodes(), topology.getCalls(), transformTrace(topology.getDebuggingTrace()));
@@ -404,7 +432,7 @@ public class DebuggingHTTPHandler {
                                      @Param("step") String step,
                                      @Param("coldStage") Optional<Boolean> coldStage,
                                      @Param("service") String service,
-                                     @Param("serviceLayer") String serviceLayer,
+                                     @Param("serviceLayer") Optional<String> serviceLayer,
                                      @Param("instance") String process) {
         Duration duration = new Duration();
         duration.setStart(startTime);
@@ -412,7 +440,9 @@ public class DebuggingHTTPHandler {
         duration.setStep(Step.valueOf(step));
         coldStage.ifPresent(duration::setColdStage);
         String instanceId = IDManager.ServiceInstanceID.buildId(
-            IDManager.ServiceID.buildId(service, Layer.nameOf(serviceLayer).isNormal()), process);
+            IDManager.ServiceID.buildId(service, serviceLayer.map(s -> Layer.nameOf(s).isNormal()).orElse(true)),
+            process
+        );
         ProcessTopology topology = topologyQuery.getProcessTopology(instanceId, duration, true).join();
         DebuggingQueryProcessTopologyRsp result = new DebuggingQueryProcessTopologyRsp(
             topology.getNodes(), topology.getCalls(), transformTrace(topology.getDebuggingTrace()));
@@ -457,9 +487,9 @@ public class DebuggingHTTPHandler {
             coldStage.ifPresent(duration::setColdStage);
             condition.setQueryDuration(duration);
         }
-
+        final boolean isNormal = serviceLayer.map(s -> Layer.nameOf(s).isNormal()).orElse(true);
         Optional<String> serviceId = service.map(
-            name -> IDManager.ServiceID.buildId(name, Layer.nameOf(serviceLayer.orElseThrow()).isNormal()));
+            name -> IDManager.ServiceID.buildId(name, isNormal));
         Optional<String> serviceInstanceId = serviceInstance.map(
             name -> IDManager.ServiceInstanceID.buildId(serviceId.orElseThrow(), name));
         Optional<String> endpointId = endpoint.map(name -> IDManager.EndpointID.buildId(serviceId.orElseThrow(), name));

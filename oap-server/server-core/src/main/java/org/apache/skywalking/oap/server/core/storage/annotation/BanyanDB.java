@@ -19,11 +19,12 @@
 package org.apache.skywalking.oap.server.core.storage.annotation;
 
 import java.lang.annotation.ElementType;
-import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import lombok.Getter;
+import org.apache.skywalking.oap.server.core.analysis.manual.log.LogRecord;
 import org.apache.skywalking.oap.server.core.analysis.metrics.Metrics;
 import org.apache.skywalking.oap.server.core.analysis.record.Record;
 import org.apache.skywalking.oap.server.core.storage.StorageID;
@@ -132,6 +133,16 @@ public @interface BanyanDB {
              * It's suitable for most tag indexing due to a better memory usage ratio and query performance.
              */
             INVERTED,
+            /**
+             * The `SKIPPING` index is optimized for the majority of stream tags, which prioritizes efficient space utilization.
+             * Such as the `trace_id` in the {@link LogRecord}.
+             */
+            SKIPPING,
+            /**
+             * The `TREE` index is designed for storing hierarchical data.
+             * Such as Trace Span.
+             */
+            TREE
         }
     }
 
@@ -176,31 +187,6 @@ public @interface BanyanDB {
     @Target({ElementType.TYPE})
     @Retention(RetentionPolicy.RUNTIME)
     @interface StoreIDAsTag {
-    }
-
-    /**
-     * Generate a TopN Aggregation and use the annotated column as a groupBy tag.
-     * It also contains parameters for TopNAggregation
-     *
-     * @since 9.4.0
-     */
-    @Target({ElementType.FIELD})
-    @Retention(RetentionPolicy.RUNTIME)
-    @Inherited
-    @interface TopNAggregation {
-        /**
-         * The size of LRU determines the maximally tolerated time range.
-         * The buffers in the time range are kept in the memory so that
-         * the data in [T - lruSize * n, T] would be accepted in the pre-aggregation process.
-         * T = the current time in the current dimensionality.
-         * n = interval in the current dimensionality.
-         */
-        int lruSize() default 2;
-
-        /**
-         * The max size of entries in a time window for the pre-aggregation.
-         */
-        int countersNumber() default 1000;
     }
 
     /**
@@ -281,5 +267,53 @@ public @interface BanyanDB {
     @Target({ElementType.TYPE})
     @Retention(RetentionPolicy.RUNTIME)
     @interface IndexMode {
+    }
+
+    @Target({ElementType.TYPE})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Group {
+        /**
+         * Specify the group name for the Stream (Record). The default value is "records".
+         */
+        StreamGroup streamGroup() default StreamGroup.RECORDS;
+    }
+
+    enum StreamGroup {
+        RECORDS("records"),
+        RECORDS_TRACE("recordsTrace"),
+        RECORDS_ZIPKIN_TRACE("recordsZipkinTrace"),
+        RECORDS_LOG("recordsLog"),
+        RECORDS_BROWSER_ERROR_LOG("recordsBrowserErrorLog");
+
+        @Getter
+        private final String name;
+
+        StreamGroup(final String name) {
+            this.name = name;
+        }
+    }
+
+    enum MeasureGroup {
+        METRICS_MINUTE("metricsMinute"),
+        METRICS_HOUR("metricsHour"),
+        METRICS_DAY("metricsDay"),
+        METADATA("metadata");
+        @Getter
+        private final String name;
+
+        MeasureGroup(final String name) {
+            this.name = name;
+        }
+    }
+
+    enum PropertyGroup {
+        PROPERTY("property");
+
+        @Getter
+        private final String name;
+
+        PropertyGroup(final String name) {
+            this.name = name;
+        }
     }
 }
