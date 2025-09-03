@@ -24,6 +24,7 @@ import org.apache.skywalking.oap.server.core.storage.management.UITemplateManage
 import org.apache.skywalking.oap.server.core.storage.profiling.asyncprofiler.IAsyncProfilerTaskLogQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.asyncprofiler.IAsyncProfilerTaskQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.asyncprofiler.IJFRDataQueryDAO;
+import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskLogQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.continuous.IContinuousProfilingPolicyDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.ebpf.IServiceLabelDAO;
@@ -98,6 +99,7 @@ public class StorageModule extends ModuleDefine {
             IAsyncProfilerTaskLogQueryDAO.class,
             IJFRDataQueryDAO.class,
             IPprofTaskQueryDAO.class,
+            IPprofTaskLogQueryDAO.class,
             StorageTTLStatusQuery.class
         };
     }

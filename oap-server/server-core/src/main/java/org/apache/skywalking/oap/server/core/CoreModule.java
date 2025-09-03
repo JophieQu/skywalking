@@ -43,6 +43,7 @@ import org.apache.skywalking.oap.server.core.profiling.continuous.ContinuousProf
 import org.apache.skywalking.oap.server.core.profiling.ebpf.EBPFProfilingMutationService;
 import org.apache.skywalking.oap.server.core.profiling.ebpf.EBPFProfilingQueryService;
 import org.apache.skywalking.oap.server.core.profiling.pprof.PprofMutationService;
+import org.apache.skywalking.oap.server.core.profiling.pprof.PprofQueryService;
 import org.apache.skywalking.oap.server.core.profiling.trace.ProfileTaskMutationService;
 import org.apache.skywalking.oap.server.core.profiling.trace.ProfileTaskQueryService;
 import org.apache.skywalking.oap.server.core.query.AggregationQueryService;
@@ -142,6 +143,7 @@ public class CoreModule extends ModuleDefine {
 
     private void addPprofService(List<Class> classes) {
         classes.add(PprofMutationService.class);
+        classes.add(PprofQueryService.class);
         classes.add(PprofTaskCache.class);
     }
 
