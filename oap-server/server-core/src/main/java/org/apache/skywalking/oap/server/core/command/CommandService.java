@@ -81,8 +81,8 @@ public class CommandService implements Service {
     public PprofTaskCommand newPprofTaskCommand(PprofTask task) {
         final String serialNumber = UUID.randomUUID().toString();
         String events = "";
-        if (StringUtil.isNotEmpty(task.getEvents())) {
-            events = task.getEvents();
+        if (task.getEvents() != null) {
+            events = task.getEvents().getName();
         }
         return new PprofTaskCommand(serialNumber, task.getId(), events, 
                 task.getDuration(), task.getStartTime(), task.getCreateTime(), task.getDumpPeriod());

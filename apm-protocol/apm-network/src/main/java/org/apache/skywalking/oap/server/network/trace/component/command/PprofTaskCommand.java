@@ -7,13 +7,13 @@ import lombok.Getter;
 
 @Getter
 public class PprofTaskCommand extends BaseCommand implements Serializable, Deserializable<PprofTaskCommand> {
-    public static final Deserializable<PprofTaskCommand> DESERIALIZER = new PprofTaskCommand("", "", 0, 0, 0, 0);
+    public static final Deserializable<PprofTaskCommand> DESERIALIZER = new PprofTaskCommand("", "", "", 0, 0, 0, 0);
     public static final String NAME = "PprofTaskQuery";
     /**
      * pprof taskId
      */
     private String taskId;
-    // Type of profiling (CPU/Memory/Block/Mutex)
+    // Type of profiling (CPU/Heap/Block/Mutex)
     private String events;
     // unit is minute
     private long duration;
@@ -33,18 +33,17 @@ public class PprofTaskCommand extends BaseCommand implements Serializable, Deser
         this.createTime = createTime;
         this.dumpPeriod = dumpPeriod;
         this.events = events;
-        this.dumpPeriod = dumpPeriod;
     }
 
-    public PprofTaskCommand(String serialNumber, String taskId,
-                            long duration, long startTime, long createTime, int dumpPeriod) {
-        super(NAME, serialNumber);
-        this.taskId = taskId;
-        this.duration = duration;
-        this.startTime = startTime;
-        this.createTime = createTime;
-        this.dumpPeriod = dumpPeriod;
-    }
+    // public PprofTaskCommand(String serialNumber, String taskId,
+    //                         long duration, long startTime, long createTime, int dumpPeriod) {
+    //     super(NAME, serialNumber);
+    //     this.taskId = taskId;
+    //     this.duration = duration;
+    //     this.startTime = startTime;
+    //     this.createTime = createTime;
+    //     this.dumpPeriod = dumpPeriod;
+    // }
 
     @Override
     public PprofTaskCommand deserialize(Command command) {

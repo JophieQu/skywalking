@@ -29,11 +29,11 @@
     <artifactId>skywalking-pprof-receiver-plugin</artifactId>
 
     <dependencies>
-<!--        <dependency>-->
-<!--            <groupId>org.apache.skywalking</groupId>-->
-<!--            <artifactId>receiver-proto</artifactId>-->
-<!--            <version>${project.version}</version>-->
-<!--        </dependency>-->
+        <dependency>
+            <groupId>org.apache.skywalking</groupId>
+            <artifactId>library-module</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.skywalking</groupId>
             <artifactId>skywalking-sharing-server-plugin</artifactId>
@@ -42,6 +42,11 @@
         <dependency>
             <groupId>org.apache.skywalking</groupId>
             <artifactId>apm-network</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.skywalking</groupId>
+            <artifactId>library-pprof-parser</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

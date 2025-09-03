@@ -40,6 +40,7 @@ import org.apache.skywalking.oap.server.core.storage.model.ModelInstaller;
 import org.apache.skywalking.oap.server.core.storage.profiling.asyncprofiler.IAsyncProfilerTaskLogQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.asyncprofiler.IAsyncProfilerTaskQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.asyncprofiler.IJFRDataQueryDAO;
+import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.continuous.IContinuousProfilingPolicyDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.ebpf.IEBPFProfilingDataDAO;
 import org.apache.skywalking.oap.server.core.storage.profiling.ebpf.IEBPFProfilingScheduleDAO;
@@ -80,6 +81,7 @@ import org.apache.skywalking.oap.server.storage.plugin.banyandb.measure.BanyanDB
 import org.apache.skywalking.oap.server.storage.plugin.banyandb.stream.BanyanDBAlarmQueryDAO;
 import org.apache.skywalking.oap.server.storage.plugin.banyandb.stream.BanyanDBAsyncProfilerTaskLogQueryDAO;
 import org.apache.skywalking.oap.server.storage.plugin.banyandb.stream.BanyanDBAsyncProfilerTaskQueryDAO;
+import org.apache.skywalking.oap.server.storage.plugin.banyandb.stream.BanyanDBPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.storage.plugin.banyandb.stream.BanyanDBBrowserLogQueryDAO;
 import org.apache.skywalking.oap.server.storage.plugin.banyandb.stream.BanyanDBContinuousProfilingPolicyDAO;
 import org.apache.skywalking.oap.server.storage.plugin.banyandb.stream.BanyanDBEBPFProfilingDataDAO;
@@ -199,6 +201,10 @@ public class BanyanDBStorageProvider extends ModuleProvider {
                         this.config.getGlobal().getAsyncProfilerTaskQueryMaxSize()
                 ));
         this.registerServiceImplementation(IJFRDataQueryDAO.class, new BanyanDBJFRDataQueryDAO(client));
+        this.registerServiceImplementation(
+                IPprofTaskQueryDAO.class, new BanyanDBPprofTaskQueryDAO(client,
+                        this.config.getGlobal().getAsyncProfilerTaskQueryMaxSize()
+                ));
         this.registerServiceImplementation(
             StorageTTLStatusQuery.class,
             new BanyanDBTTLStatusQuery(config)

@@ -31,6 +31,9 @@ import org.apache.skywalking.oap.server.core.storage.annotation.ElasticSearch;
 import org.apache.skywalking.oap.server.core.storage.type.Convert2Entity;
 import org.apache.skywalking.oap.server.core.storage.type.Convert2Storage;
 import org.apache.skywalking.oap.server.core.storage.type.StorageBuilder;
+import java.util.List;
+
+import com.google.gson.Gson;
 
 import static org.apache.skywalking.oap.server.core.source.DefaultScopeDefine.PPROF_TASK;
 
@@ -43,6 +46,7 @@ import static org.apache.skywalking.oap.server.core.source.DefaultScopeDefine.PP
 @Stream(name = PprofTaskRecord.INDEX_NAME, scopeId = PPROF_TASK, builder = PprofTaskRecord.Builder.class, processor = NoneStreamProcessor.class)
 @BanyanDB.TimestampColumn(PprofTaskRecord.CREATE_TIME)
 public class PprofTaskRecord extends NoneStream {
+    private static final Gson GSON = new Gson();
 
     public static final String INDEX_NAME = "pprof_task";
     public static final String TASK_ID = "task_id";
@@ -110,4 +114,9 @@ public class PprofTaskRecord extends NoneStream {
             converter.accept(TIME_BUCKET, storageData.getTimeBucket());
         }
     }
+
+    public void setServiceInstanceIdsFromList(List<String> serviceInstanceIds) {
+        this.serviceInstanceIds = GSON.toJson(serviceInstanceIds);
+    }
+
 }

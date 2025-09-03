@@ -17,10 +17,10 @@ public class PprofTask {
     
     private String id;
     private String serviceId;
-    private String serviceInstanceIds;
+    private List<String> serviceInstanceIds;
     private long createTime;
     private long startTime;
-    private String events;
+    private PprofEventType events;
     private int duration;
     private int dumpPeriod;
 

@@ -22,7 +22,9 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 
 import org.apache.skywalking.oap.server.library.util.StringUtil;
 import org.apache.skywalking.library.elasticsearch.requests.search.BoolQueryBuilder;
@@ -34,12 +36,14 @@ import org.apache.skywalking.library.elasticsearch.response.search.SearchHit;
 import org.apache.skywalking.library.elasticsearch.response.search.SearchResponse;
 import org.apache.skywalking.oap.server.core.profiling.pprof.storage.PprofTaskRecord;
 import org.apache.skywalking.oap.server.core.query.type.PprofTask;
+import org.apache.skywalking.oap.server.core.query.type.PprofEventType;
 import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.library.client.elasticsearch.ElasticSearchClient;
 import org.apache.skywalking.oap.server.storage.plugin.elasticsearch.base.EsDAO;
 import org.apache.skywalking.oap.server.storage.plugin.elasticsearch.base.IndexController;
 
 public class PprofTaskQueryEsDAO extends EsDAO implements IPprofTaskQueryDAO {
+    private static final Gson GSON = new Gson();
 
     private final int queryMaxSize;
 
@@ -110,14 +114,32 @@ public class PprofTaskQueryEsDAO extends EsDAO implements IPprofTaskQueryDAO {
 
     private PprofTask parseTask(SearchHit data) {
         Map<String, Object> source = data.getSource();
+        Type listType = new TypeToken<List<String>>() {
+        }.getType();
 
+        String serviceInstanceIds = (String) source.get(PprofTaskRecord.SERVICE_INSTANCE_IDS);
+
+        List<String> instanceIdList = GSON.fromJson(serviceInstanceIds, listType);
+        
+        // Convert string events to PprofEventType enum
+        String eventsStr = (String) source.get(PprofTaskRecord.EVENT_TYPES);
+        PprofEventType eventType = null;
+        if (StringUtil.isNotEmpty(eventsStr)) {
+            try {
+                eventType = PprofEventType.valueOfString(eventsStr);
+            } catch (Exception e) {
+                // Default to CPU if conversion fails
+                eventType = PprofEventType.CPU;
+            }
+        }
+        
         return PprofTask.builder()
                 .id((String) source.get(PprofTaskRecord.TASK_ID))
                 .serviceId((String) source.get(PprofTaskRecord.SERVICE_ID))
-                .serviceInstanceIds((String) source.get(PprofTaskRecord.SERVICE_INSTANCE_IDS))
+                .serviceInstanceIds(instanceIdList)
                 .createTime(((Number) source.get(PprofTaskRecord.CREATE_TIME)).longValue())
                 .startTime(((Number) source.get(PprofTaskRecord.START_TIME)).longValue())
-                .events((String) source.get(PprofTaskRecord.EVENT_TYPES))
+                .events(eventType)
                 .duration(((Number) source.get(PprofTaskRecord.DURATION)).intValue())
                 .dumpPeriod(((Number) source.get(PprofTaskRecord.DUMP_PERIOD)).intValue())
                 .build();

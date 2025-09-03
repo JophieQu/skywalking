@@ -10,9 +10,9 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public enum PprofEventType {
     CPU(0, "cpu"),
-    Memory(1, "memory"),
-    Block(2, "block"),
-    Mutex(3, "mutex");
+    HEAP(1, "heap"),
+    BLOCK(2, "block"),
+    MUTEX(3, "mutex");
 
 
     private final int code;

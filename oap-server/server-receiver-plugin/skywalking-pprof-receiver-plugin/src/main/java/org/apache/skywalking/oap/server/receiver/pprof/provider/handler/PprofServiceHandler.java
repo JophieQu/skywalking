@@ -21,13 +21,8 @@ package org.apache.skywalking.oap.server.receiver.pprof.provider.handler;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Objects;
-import org.apache.skywalking.oap.server.library.util.CollectionUtils;
-
+import org.apache.skywalking.oap.server.core.query.type.PprofTaskLogOperationType;
 import org.apache.skywalking.apm.network.pprof.v10.PprofData;
 import org.apache.skywalking.apm.network.pprof.v10.PprofTaskGrpc;
 import org.apache.skywalking.apm.network.pprof.v10.PprofCollectionResponse;
@@ -39,12 +34,17 @@ import org.apache.skywalking.apm.network.pprof.v10.PprofTaskCommandQuery;
 import org.apache.skywalking.oap.server.core.CoreModule;
 import org.apache.skywalking.oap.server.core.analysis.IDManager;
 import org.apache.skywalking.oap.server.core.command.CommandService;
-import org.apache.skywalking.oap.server.core.query.type.PprofEventType;
+import java.util.Objects;
+import org.apache.skywalking.oap.server.library.util.CollectionUtils;
 import org.apache.skywalking.oap.server.core.query.type.PprofTask;
 import org.apache.skywalking.oap.server.core.source.SourceReceiver;
 import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.core.storage.StorageModule;
-//import org.apache.skywalking.oap.server.core.cache.pprofTaskCache;
+import org.apache.skywalking.oap.server.core.cache.PprofTaskCache;
+import org.apache.skywalking.oap.server.core.profiling.pprof.storage.PprofTaskLogRecord;
+import org.apache.skywalking.oap.server.core.analysis.worker.RecordStreamProcessor;
+import org.apache.skywalking.oap.server.core.analysis.TimeBucket;
+import java.util.concurrent.TimeUnit;
 
 //import org.apache.skywalking.oap.server.core.storage.StorageModule;
 //import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
@@ -59,39 +59,21 @@ import org.apache.skywalking.oap.server.receiver.pprof.provider.handler.stream.P
 public class PprofServiceHandler extends PprofTaskGrpc.PprofTaskImplBase implements GRPCHandler {
 
     private final IPprofTaskQueryDAO taskDAO;
-    private final CommandService commandService;
     private final SourceReceiver sourceReceiver;
+    private final CommandService commandService;
+    private final PprofTaskCache taskCache;
     private final int PprofMaxSize;
-    private final String pprofStorageDir;
     private final boolean memoryParserEnabled;
 
     public PprofServiceHandler(ModuleManager moduleManager, int PprofMaxSize, boolean memoryParserEnabled) {
         this.taskDAO = moduleManager.find(StorageModule.NAME).provider().getService(IPprofTaskQueryDAO.class);
         this.commandService = moduleManager.find(CoreModule.NAME).provider().getService(CommandService.class);
         this.sourceReceiver = moduleManager.find(CoreModule.NAME).provider().getService(SourceReceiver.class);
+        this.taskCache = moduleManager.find(CoreModule.NAME).provider().getService(PprofTaskCache.class);
         this.PprofMaxSize = PprofMaxSize;
         this.memoryParserEnabled = memoryParserEnabled;
-        // Set pprof storage directory
-        this.pprofStorageDir = "/Users/jingyiqu/ospp/grpctest";
-        initStorageDirectory();
     }
     
-    /**
-     * Initialize the storage directory for pprof files
-     */
-    private void initStorageDirectory() {
-        try {
-            Path storagePath = Paths.get(pprofStorageDir);
-            if (!Files.exists(storagePath)) {
-                Files.createDirectories(storagePath);
-                log.info("Created pprof storage directory: {}", pprofStorageDir);
-            }
-        } catch (IOException e) {
-            log.error("Failed to create pprof storage directory: {}", pprofStorageDir, e);
-        }
-    }
-    
-
     
     @Override
     public StreamObserver<PprofData> collect(StreamObserver<PprofCollectionResponse> responseObserver) {
@@ -104,45 +86,43 @@ public class PprofServiceHandler extends PprofTaskGrpc.PprofTaskImplBase impleme
 
     @Override
     public void getPprofTaskCommands(PprofTaskCommandQuery request, StreamObserver<Commands> responseObserver) {
-        if (log.isDebugEnabled()) {
-            log.debug("Received getPprofTaskCommands request from service: {}, serviceInstance: {}, lastCommandTime: {}",
-                    request.getService(), request.getServiceInstance(), request.getLastCommandTime());
-        }
-
+        log.info("[Pprof命令查询] 收到agent请求 - service={}, serviceInstance={}, lastCommandTime={}", 
+                request.getService(), request.getServiceInstance(), request.getLastCommandTime());
+        
         String serviceId = IDManager.ServiceID.buildId(request.getService(), true);
         String serviceInstanceId = IDManager.ServiceInstanceID.buildId(serviceId, request.getServiceInstance());
-        
-        // TODO: fetch tasks from cache
-        PprofTask task = createSamplePprofTask(serviceId);
-        
-        // Check if the task should be sent based on lastCommandTime
+
+        log.info("收到agent上报，service: {}, serviceInstance: {}", request.getService(), request.getServiceInstance());
+        log.info("编码后 serviceId: {}, serviceInstanceId: {}", serviceId, serviceInstanceId);
+        PprofTask task = taskCache.getPprofTask(serviceId);
+        // if task is null or createTime is less than lastCommandTime, return empty commands
+        log.info("task: {}", task);
+        log.info("request.getLastCommandTime(): {}", request.getLastCommandTime());
         if (Objects.isNull(task) || task.getCreateTime() <= request.getLastCommandTime() ||
-                (!CollectionUtils.isEmpty(task.getServiceInstanceIds()) && !task.getServiceInstanceIds().contains(serviceInstanceId))) {
+            (!CollectionUtils.isEmpty(task.getServiceInstanceIds()) && !task.getServiceInstanceIds().contains(serviceInstanceId))) {
             responseObserver.onNext(Commands.newBuilder().build());
             responseObserver.onCompleted();
             return;
         }
 
-        PprofTaskCommand taskCommand = commandService.newPprofTaskCommand(task);
-        Commands commands = Commands.newBuilder().addCommands(taskCommand.serialize()).build();
+        PprofTaskCommand pprofTaskCommand = commandService.newPprofTaskCommand(task);
+        Commands commands = Commands.newBuilder().addCommands(pprofTaskCommand.serialize()).build();
         responseObserver.onNext(commands);
         responseObserver.onCompleted();
-        // todo record pprof task log
-        return;
+        recordPprofTaskLog(task, serviceInstanceId, PprofTaskLogOperationType.NOTIFIED);
+        log.info("Response sent to agent: {} - {}", request.getService(), request.getServiceInstance());
     }
 
-    private PprofTask createSamplePprofTask(String serviceId) {
-        long currentTime = System.currentTimeMillis();
-        return PprofTask.builder()
-                .id("pprof-task-" + currentTime)
-                .serviceId(serviceId)
-                .serviceInstanceIds("instance-1")
-                .createTime(currentTime)
-                .startTime(currentTime + 30000) // Start in 30 seconds
-                .events("CPU")
-                .duration(5) // 1 minutes
-                .dumpPeriod(100)
-                .build();
+    public static void recordPprofTaskLog(PprofTask task, String instanceId, PprofTaskLogOperationType operationType) {
+        PprofTaskLogRecord logRecord = new PprofTaskLogRecord();
+        logRecord.setTaskId(task.getId());
+        logRecord.setInstanceId(instanceId);
+        logRecord.setOperationType(operationType.getCode());
+        logRecord.setOperationTime(System.currentTimeMillis());
+        long timestamp = task.getCreateTime() + TimeUnit.SECONDS.toMillis(task.getDuration());
+        logRecord.setTimestamp(timestamp);
+        logRecord.setTimeBucket(TimeBucket.getRecordTimeBucket(timestamp));
+        RecordStreamProcessor.getInstance().in(logRecord);
     }
 
     public static PprofCollectionMetaData parseMetaData(PprofMetaData metaData, IPprofTaskQueryDAO taskDAO) throws IOException {
