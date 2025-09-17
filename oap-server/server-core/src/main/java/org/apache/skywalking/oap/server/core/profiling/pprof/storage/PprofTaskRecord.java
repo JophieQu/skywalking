@@ -53,7 +53,6 @@ public class PprofTaskRecord extends NoneStream {
     public static final String SERVICE_ID = "service_id";
     public static final String SERVICE_INSTANCE_IDS = "service_instance_ids";
     public static final String CREATE_TIME = "create_time";
-    public static final String START_TIME = "start_time";
     public static final String EVENT_TYPES = "events";
     public static final String DURATION = "duration";
     public static final String DUMP_PERIOD = "dump_period";
@@ -74,9 +73,6 @@ public class PprofTaskRecord extends NoneStream {
     @Column(name = CREATE_TIME)
     private long createTime;
     @ElasticSearch.EnableDocValues
-    @Column(name = START_TIME)
-    @BanyanDB.NoIndexing
-    private long startTime;
     @Column(name = EVENT_TYPES)
     private String events;
     @Column(name = DURATION)
@@ -93,7 +89,6 @@ public class PprofTaskRecord extends NoneStream {
             record.setServiceInstanceIds((String) converter.get(SERVICE_INSTANCE_IDS));
             record.setTaskId((String) converter.get(TASK_ID));
             record.setCreateTime(((Number) converter.get(CREATE_TIME)).longValue());
-            record.setStartTime(((Number) converter.get(START_TIME)).longValue());
             record.setEvents((String) converter.get(EVENT_TYPES));
             record.setDuration(((Number) converter.get(DURATION)).intValue());
             record.setDumpPeriod(((Number) converter.get(DUMP_PERIOD)).intValue());
@@ -107,7 +102,6 @@ public class PprofTaskRecord extends NoneStream {
             converter.accept(SERVICE_INSTANCE_IDS, storageData.getServiceInstanceIds());
             converter.accept(TASK_ID, storageData.getTaskId());
             converter.accept(CREATE_TIME, storageData.getCreateTime());
-            converter.accept(START_TIME, storageData.getStartTime());
             converter.accept(EVENT_TYPES, storageData.getEvents());
             converter.accept(DURATION, storageData.getDuration());
             converter.accept(DUMP_PERIOD, storageData.getDumpPeriod());

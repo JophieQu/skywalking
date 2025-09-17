@@ -33,13 +33,14 @@ import org.apache.skywalking.oap.server.core.query.type.PprofEventType;
 import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.library.util.StringUtil;
 import org.apache.skywalking.oap.server.storage.plugin.banyandb.BanyanDBStorageClient;
-
+import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+@Slf4j
 public class BanyanDBPprofTaskQueryDAO extends AbstractBanyanDBDAO implements IPprofTaskQueryDAO {
     private static final Gson GSON = new Gson();
     private static final Set<String> TAGS = ImmutableSet.of(
@@ -47,7 +48,6 @@ public class BanyanDBPprofTaskQueryDAO extends AbstractBanyanDBDAO implements IP
             PprofTaskRecord.SERVICE_INSTANCE_IDS,
             PprofTaskRecord.TASK_ID,
             PprofTaskRecord.CREATE_TIME,
-            PprofTaskRecord.START_TIME,
             PprofTaskRecord.EVENT_TYPES,
             PprofTaskRecord.DURATION,
             PprofTaskRecord.DUMP_PERIOD
@@ -130,6 +130,7 @@ public class BanyanDBPprofTaskQueryDAO extends AbstractBanyanDBDAO implements IP
             } catch (Exception e) {
                 // Default to CPU if conversion fails
                 eventType = PprofEventType.CPU;
+                log.warn("Failed to parse pprof event type: {}, using CPU as default", eventsStr, e);
             }
         }
         
@@ -138,7 +139,6 @@ public class BanyanDBPprofTaskQueryDAO extends AbstractBanyanDBDAO implements IP
                 .serviceId(data.getTagValue(PprofTaskRecord.SERVICE_ID))
                 .serviceInstanceIds(serviceInstanceIdList)
                 .createTime(((Number) data.getTagValue(PprofTaskRecord.CREATE_TIME)).longValue())
-                .startTime(((Number) data.getTagValue(PprofTaskRecord.START_TIME)).longValue())
                 .events(eventType)
                 .duration(((Number) data.getTagValue(PprofTaskRecord.DURATION)).intValue())
                 .dumpPeriod(((Number) data.getTagValue(PprofTaskRecord.DUMP_PERIOD)).intValue())

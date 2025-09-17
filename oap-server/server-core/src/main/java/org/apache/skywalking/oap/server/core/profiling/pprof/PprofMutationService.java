@@ -1,4 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package org.apache.skywalking.oap.server.core.profiling.pprof;
+
 import lombok.RequiredArgsConstructor;
 import org.apache.skywalking.oap.server.library.module.Service;
 import org.apache.skywalking.oap.server.library.module.ModuleManager;
@@ -11,7 +30,6 @@ import org.apache.skywalking.oap.server.core.analysis.worker.NoneStreamProcessor
 import java.util.concurrent.TimeUnit;
 import org.apache.skywalking.oap.server.core.analysis.TimeBucket;
 import org.apache.skywalking.oap.server.core.Const;
-
 import org.apache.skywalking.oap.server.core.query.type.PprofTaskCreationResult;
 import org.apache.skywalking.oap.server.core.query.type.PprofTaskCreationType;
 import org.apache.skywalking.oap.server.core.query.type.PprofTask;
@@ -41,9 +59,6 @@ public class PprofMutationService implements Service {
                                               int duration,
                                               PprofEventType events,
                                               int dumpPeriod) throws IOException {
-        log.info("[Pprof任务创建] 开始创建任务 - serviceId={}, serviceInstanceIds={}, duration={}, events={}, dumpPeriod={}", 
-                serviceId, serviceInstanceIds, duration, events, dumpPeriod);
-        
         long createTime = System.currentTimeMillis();
         // check data
         PprofTaskCreationResult checkResult = checkDataSuccess(
@@ -63,20 +78,8 @@ public class PprofMutationService implements Service {
         task.setEvents(events.toString());
         task.setDumpPeriod(dumpPeriod);
         task.setCreateTime(createTime);
-        task.setStartTime(createTime);
         task.setTimeBucket(TimeBucket.getRecordTimeBucket(createTime));
         NoneStreamProcessor.getInstance().in(task);
-        log.info("创建 Pprof 任务详细信息: taskId={}, serviceId={}, serviceInstanceIds={}, duration={}, events={}, dumpPeriod={}, createTime={}, startTime={}, timeBucket={}",
-                task.getTaskId(),
-                task.getServiceId(),
-                task.getServiceInstanceIds(),
-                task.getDuration(),
-                task.getEvents(),
-                task.getDumpPeriod(),
-                task.getCreateTime(),
-                task.getStartTime(),
-                task.getTimeBucket()
-        );
         return PprofTaskCreationResult.builder()
                 .id(task.id().build())
                 .code(PprofTaskCreationType.SUCCESS)
@@ -134,7 +137,7 @@ public class PprofMutationService implements Service {
         if (CollectionUtils.isNotEmpty(alreadyHaveTaskList)) {
             for (PprofTask task : alreadyHaveTaskList) {
                 if (task.getCreateTime() + TimeUnit.SECONDS.toMillis(task.getDuration()) >= createTime) {
-                    // if the endTime is greater or equal than the startTime of the newly created task, i.e. there is overlap between two tasks, it is an invalid case, it will return an error
+                    // if the endTime is greater or equal than the createTime of the newly created task, i.e. there is overlap between two tasks, it is an invalid case, it will return an error
                     return "current service already has monitor pprof task execute at this time";
                 }
             }

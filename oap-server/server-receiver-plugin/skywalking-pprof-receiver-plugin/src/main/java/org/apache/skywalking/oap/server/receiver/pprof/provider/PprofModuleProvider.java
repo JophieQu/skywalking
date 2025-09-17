@@ -68,9 +68,9 @@ public class PprofModuleProvider extends ModuleProvider {
         GRPCHandlerRegister grpcHandlerRegister = getManager().find(SharingServerModule.NAME)
                 .provider()
                 .getService(GRPCHandlerRegister.class);
-        PprofServiceHandler PprofServiceHandler = new PprofServiceHandler(getManager(),
+        PprofServiceHandler pprofServiceHandler = new PprofServiceHandler(getManager(),
                 config.getPprofMaxSize(), config.isMemoryParserEnabled());
-        grpcHandlerRegister.addHandler(PprofServiceHandler);
+        grpcHandlerRegister.addHandler(pprofServiceHandler);
     }
 
     @Override

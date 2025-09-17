@@ -33,7 +33,6 @@ import org.apache.skywalking.oap.server.core.profiling.ebpf.storage.EBPFProfilin
 import org.apache.skywalking.oap.server.core.query.type.AsyncProfilerEventType;
 import org.apache.skywalking.oap.server.core.query.type.AsyncProfilerTask;
 import org.apache.skywalking.oap.server.core.query.type.EBPFProfilingTaskExtension;
-import org.apache.skywalking.oap.server.core.query.type.PprofEventType;
 import org.apache.skywalking.oap.server.core.query.type.PprofTask;
 import org.apache.skywalking.oap.server.library.util.CollectionUtils;
 import org.apache.skywalking.oap.server.library.util.StringUtil;
@@ -85,7 +84,7 @@ public class CommandService implements Service {
             events = task.getEvents().getName();
         }
         return new PprofTaskCommand(serialNumber, task.getId(), events, 
-                task.getDuration(), task.getStartTime(), task.getCreateTime(), task.getDumpPeriod());
+                task.getDuration(), task.getCreateTime(), task.getDumpPeriod());
     }
 
     /**

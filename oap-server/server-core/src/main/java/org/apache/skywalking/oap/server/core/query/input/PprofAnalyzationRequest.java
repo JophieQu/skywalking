@@ -16,27 +16,16 @@
  *
  */
 
-package org.apache.skywalking.oap.server.core.query.type;
+package org.apache.skywalking.oap.server.core.query.input;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.Setter;
+
+import java.util.List;
 
 @Getter
-@AllArgsConstructor
-public enum PprofEventType {
-    CPU(0, "cpu"),
-    HEAP(1, "heap"),
-    BLOCK(2, "block"),
-    MUTEX(3, "mutex"),
-    GOROUTINE(4, "goroutine"),
-    THREADCREATE(5, "threadcreate"),
-    ALLOCS(6, "allocs");
-
-
-    private final int code;
-    private final String name;
-
-    public static PprofEventType valueOfString(String event) {
-        return PprofEventType.valueOf(event);
-    }
+@Setter
+public class PprofAnalyzationRequest {
+    private String taskId;
+    private List<String> instanceIds;
 }

@@ -7,29 +7,26 @@ import lombok.Getter;
 
 @Getter
 public class PprofTaskCommand extends BaseCommand implements Serializable, Deserializable<PprofTaskCommand> {
-    public static final Deserializable<PprofTaskCommand> DESERIALIZER = new PprofTaskCommand("", "", "", 0, 0, 0, 0);
+    public static final Deserializable<PprofTaskCommand> DESERIALIZER = new PprofTaskCommand("", "", "", 0, 0, 0);
     public static final String NAME = "PprofTaskQuery";
     /**
      * pprof taskId
      */
     private String taskId;
-    // Type of profiling (CPU/Heap/Block/Mutex)
+    // Type of profiling (CPU/Heap/Block/Mutex/Goroutine/Threadcreate/Allocs)
     private String events;
     // unit is minute
     private long duration;
-    // Unix timestamp in milliseconds when the task should start
-    private long startTime;
     // Unix timestamp in milliseconds when the task was created
     private long createTime;
     //
     private int dumpPeriod;
 
     public PprofTaskCommand(String serialNumber, String taskId, String events,
-                            long duration, long startTime, long createTime, int dumpPeriod) {
+                            long duration, long createTime, int dumpPeriod) {
         super(NAME, serialNumber);
         this.taskId = taskId;
         this.duration = duration;
-        this.startTime = startTime;
         this.createTime = createTime;
         this.dumpPeriod = dumpPeriod;
         this.events = events;
@@ -51,7 +48,6 @@ public class PprofTaskCommand extends BaseCommand implements Serializable, Deser
         String taskId = null;
         String events = null;
         long duration = 0;
-        long startTime = 0;
         long createTime = 0;
         int dumpPeriod = 0;
         String serialNumber = null;
@@ -64,15 +60,13 @@ public class PprofTaskCommand extends BaseCommand implements Serializable, Deser
                 events = pair.getValue();
             } else if ("Duration".equals(pair.getKey())) {
                 duration = Long.parseLong(pair.getValue());
-            } else if ("StartTime".equals(pair.getKey())) {
-                startTime = Long.parseLong(pair.getValue());
             } else if ("CreateTime".equals(pair.getKey())) {
                 createTime = Long.parseLong(pair.getValue());
             } else if ("DumpPeriod".equals(pair.getKey())) {
                 dumpPeriod = Integer.parseInt(pair.getValue());
             }
         }
-        return new PprofTaskCommand(serialNumber, taskId, events, duration, startTime, createTime, dumpPeriod);
+        return new PprofTaskCommand(serialNumber, taskId, events, duration, createTime, dumpPeriod);
     }
 
     @Override
@@ -81,7 +75,6 @@ public class PprofTaskCommand extends BaseCommand implements Serializable, Deser
         builder.addArgs(KeyStringValuePair.newBuilder().setKey("TaskId").setValue(taskId))
                 .addArgs(KeyStringValuePair.newBuilder().setKey("Events").setValue(events))
                 .addArgs(KeyStringValuePair.newBuilder().setKey("Duration").setValue(String.valueOf(duration)))
-                .addArgs(KeyStringValuePair.newBuilder().setKey("StartTime").setValue(String.valueOf(startTime)))
                 .addArgs(KeyStringValuePair.newBuilder().setKey("CreateTime").setValue(String.valueOf(createTime)))
                 .addArgs(KeyStringValuePair.newBuilder().setKey("DumpPeriod").setValue(String.valueOf(dumpPeriod)));
         return builder;

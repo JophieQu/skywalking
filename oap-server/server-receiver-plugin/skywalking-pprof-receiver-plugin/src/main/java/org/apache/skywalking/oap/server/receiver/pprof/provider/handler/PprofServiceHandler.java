@@ -21,7 +21,6 @@ package org.apache.skywalking.oap.server.receiver.pprof.provider.handler;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
-import java.util.Arrays;
 import org.apache.skywalking.oap.server.core.query.type.PprofTaskLogOperationType;
 import org.apache.skywalking.apm.network.pprof.v10.PprofData;
 import org.apache.skywalking.apm.network.pprof.v10.PprofTaskGrpc;
@@ -62,42 +61,31 @@ public class PprofServiceHandler extends PprofTaskGrpc.PprofTaskImplBase impleme
     private final SourceReceiver sourceReceiver;
     private final CommandService commandService;
     private final PprofTaskCache taskCache;
-    private final int PprofMaxSize;
+    private final int pprofMaxSize;
     private final boolean memoryParserEnabled;
 
-    public PprofServiceHandler(ModuleManager moduleManager, int PprofMaxSize, boolean memoryParserEnabled) {
+    public PprofServiceHandler(ModuleManager moduleManager, int pprofMaxSize, boolean memoryParserEnabled) {
         this.taskDAO = moduleManager.find(StorageModule.NAME).provider().getService(IPprofTaskQueryDAO.class);
         this.commandService = moduleManager.find(CoreModule.NAME).provider().getService(CommandService.class);
         this.sourceReceiver = moduleManager.find(CoreModule.NAME).provider().getService(SourceReceiver.class);
         this.taskCache = moduleManager.find(CoreModule.NAME).provider().getService(PprofTaskCache.class);
-        this.PprofMaxSize = PprofMaxSize;
+        this.pprofMaxSize = pprofMaxSize;
         this.memoryParserEnabled = memoryParserEnabled;
     }
-    
     
     @Override
     public StreamObserver<PprofData> collect(StreamObserver<PprofCollectionResponse> responseObserver) {
         return memoryParserEnabled ?
-                new PprofByteBufCollectionObserver(taskDAO,responseObserver, sourceReceiver, PprofMaxSize)
-                : new PprofFileCollectionObserver(taskDAO, responseObserver, sourceReceiver, PprofMaxSize);
+                new PprofByteBufCollectionObserver(taskDAO, responseObserver, sourceReceiver, pprofMaxSize)
+                : new PprofFileCollectionObserver(taskDAO, responseObserver, sourceReceiver, pprofMaxSize);
     }
-
-    
 
     @Override
     public void getPprofTaskCommands(PprofTaskCommandQuery request, StreamObserver<Commands> responseObserver) {
-        log.info("[Pprof命令查询] 收到agent请求 - service={}, serviceInstance={}, lastCommandTime={}", 
-                request.getService(), request.getServiceInstance(), request.getLastCommandTime());
-        
         String serviceId = IDManager.ServiceID.buildId(request.getService(), true);
         String serviceInstanceId = IDManager.ServiceInstanceID.buildId(serviceId, request.getServiceInstance());
-
-        log.info("收到agent上报，service: {}, serviceInstance: {}", request.getService(), request.getServiceInstance());
-        log.info("编码后 serviceId: {}, serviceInstanceId: {}", serviceId, serviceInstanceId);
         PprofTask task = taskCache.getPprofTask(serviceId);
         // if task is null or createTime is less than lastCommandTime, return empty commands
-        log.info("task: {}", task);
-        log.info("request.getLastCommandTime(): {}", request.getLastCommandTime());
         if (Objects.isNull(task) || task.getCreateTime() <= request.getLastCommandTime() ||
             (!CollectionUtils.isEmpty(task.getServiceInstanceIds()) && !task.getServiceInstanceIds().contains(serviceInstanceId))) {
             responseObserver.onNext(Commands.newBuilder().build());
@@ -110,7 +98,6 @@ public class PprofServiceHandler extends PprofTaskGrpc.PprofTaskImplBase impleme
         responseObserver.onNext(commands);
         responseObserver.onCompleted();
         recordPprofTaskLog(task, serviceInstanceId, PprofTaskLogOperationType.NOTIFIED);
-        log.info("Response sent to agent: {} - {}", request.getService(), request.getServiceInstance());
     }
 
     public static void recordPprofTaskLog(PprofTask task, String instanceId, PprofTaskLogOperationType operationType) {

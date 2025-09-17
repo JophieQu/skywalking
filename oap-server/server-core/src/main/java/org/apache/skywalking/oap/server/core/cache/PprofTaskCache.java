@@ -1,4 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package org.apache.skywalking.oap.server.core.cache;
+
 import org.apache.skywalking.oap.server.library.module.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -6,10 +25,8 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import org.apache.skywalking.oap.server.core.CoreModuleConfig;
 import org.apache.skywalking.oap.server.core.analysis.TimeBucket;
-
 import org.apache.skywalking.oap.server.core.query.type.PprofTask;
 import org.apache.skywalking.oap.server.core.storage.StorageModule;
-
 import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.library.module.ModuleManager;
 import java.time.Duration;
@@ -32,8 +49,8 @@ public class PprofTaskCache implements Service {
         serviceId2taskCache = CacheBuilder.newBuilder()
                 .initialCapacity(initialCapacitySize)
                 .maximumSize(moduleConfig.getMaxSizeOfProfileTask())
-                // remove old profile task data
-                .expireAfterWrite(Duration.ofMinutes(1))
+                // remove old profile task data - extend to 10 minutes to ensure data availability
+                .expireAfterWrite(Duration.ofMinutes(10))
                 .build();
     }
 
@@ -47,18 +64,7 @@ public class PprofTaskCache implements Service {
     }
 
     public PprofTask getPprofTask(String serviceId) {
-//        LOGGER.info("[Pprof任务缓存] 查询缓存 - serviceId={}, 长度={}", serviceId, serviceId.length());
-//        LOGGER.info("[Pprof任务缓存] 当前缓存键列表: {}", serviceId2taskCache.asMap().keySet());
-//
         PprofTask task = serviceId2taskCache.getIfPresent(serviceId);
-        
-//        if (task != null) {
-//            LOGGER.info("[Pprof任务缓存] 缓存命中 - serviceId={}, taskId={}, createTime={}, events={}",
-//                    serviceId, task.getId(), task.getCreateTime(), task.getEvents());
-//        } else {
-//            LOGGER.info("[Pprof任务缓存] 缓存未命中 - serviceId={}", serviceId);
-//        }
-//
         return task;
     }
 
@@ -78,7 +84,7 @@ public class PprofTaskCache implements Service {
     }
 
     /**
-     * use for every db query, +5min end time(because search through task's start time)
+     * use for every db query, +5min end time(because search through task's create time)
      */
     public long getCacheEndTimeBucket() {
         return TimeBucket.getRecordTimeBucket(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5));

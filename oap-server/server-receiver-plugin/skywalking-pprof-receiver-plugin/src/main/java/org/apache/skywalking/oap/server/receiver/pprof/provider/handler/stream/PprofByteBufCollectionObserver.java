@@ -20,22 +20,20 @@ package org.apache.skywalking.oap.server.receiver.pprof.provider.handler.stream;
 
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.skywalking.oap.server.library.pprof.parser.PprofParser;
-import entity.FrameTree;
+import org.apache.skywalking.oap.server.library.pprof.type.FrameTree;
 import org.apache.skywalking.apm.network.pprof.v10.PprofData;
 import org.apache.skywalking.oap.server.core.query.type.PprofTask;
 import org.apache.skywalking.apm.network.pprof.v10.PprofCollectionResponse;
 import org.apache.skywalking.apm.network.pprof.v10.PprofProfilingStatus;
-import org.apache.skywalking.oap.server.core.analysis.IDManager;
 import org.apache.skywalking.oap.server.core.source.PprofProfilingData;
 import org.apache.skywalking.oap.server.core.source.SourceReceiver;
 import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.Objects;
+import org.apache.skywalking.oap.server.core.query.type.PprofEventType;
 import org.apache.skywalking.oap.server.core.query.type.PprofTaskLogOperationType;
 import static org.apache.skywalking.oap.server.receiver.pprof.provider.handler.PprofServiceHandler.parseMetaData;
 import static org.apache.skywalking.oap.server.receiver.pprof.provider.handler.PprofServiceHandler.recordPprofTaskLog;
@@ -59,11 +57,10 @@ public class PprofByteBufCollectionObserver implements StreamObserver<PprofData>
     }
 
     @Override
-    @SneakyThrows
     public void onNext(PprofData pprofData) {
-        if (Objects.isNull(taskMetaData) && pprofData.hasMetadata()) {
-            taskMetaData = parseMetaData(pprofData.getMetadata(),taskDAO);
-            
+        try {
+            if (Objects.isNull(taskMetaData) && pprofData.hasMetadata()) {
+                taskMetaData = parseMetaData(pprofData.getMetadata(), taskDAO);
             if (PprofProfilingStatus.PPROF_PROFILING_SUCCESS.equals(taskMetaData.getType())) {
                 int size = taskMetaData.getContentSize();
                 log.info("pprofMaxSize: {}, Pprof data size: {}", pprofMaxSize, size);
@@ -95,11 +92,12 @@ public class PprofByteBufCollectionObserver implements StreamObserver<PprofData>
         } else if (pprofData.hasContent()) {
             if (buf != null) {
                 pprofData.getContent().copyTo(buf);
-                
-                if (log.isDebugEnabled()) {
-                    log.debug("Received {} bytes of pprof data", pprofData.getContent().size());
-                }
+                log.info("Received {} bytes of pprof data", pprofData.getContent().size());
             }
+        }
+        } catch (IOException e) {
+            log.error("Error processing pprof data", e);
+            responseObserver.onError(Status.INTERNAL.withDescription("Error processing pprof data: " + e.getMessage()).asRuntimeException());
         }
     }
 
@@ -108,24 +106,26 @@ public class PprofByteBufCollectionObserver implements StreamObserver<PprofData>
         Status status = Status.fromThrowable(throwable);
         if (Status.CANCELLED.getCode() == status.getCode()) {
             if (log.isDebugEnabled()) {
-                log.debug("Pprof data collection cancelled: {}", throwable.getMessage());
+                log.debug(throwable.getMessage(), throwable);
             }
-        } else {
-            log.error("Error in receiving pprof profiling data", throwable);
+            return;
         }
+        log.error("Error in receiving pprof profiling data", throwable);
+        
     }
 
     @Override
-    @SneakyThrows
     public void onCompleted() {
         responseObserver.onCompleted();
         if (Objects.nonNull(buf)) {
             buf.flip();
-            parseAndStorageData(taskMetaData, buf);
+            try {
+                parseAndStorageData(taskMetaData, buf);
+            } catch (IOException e) {
+                log.error("Failed to parse and store pprof data", e);
+            }
         }
     }
-
-    
 
     private void parseAndStorageData(PprofCollectionMetaData taskMetaData, ByteBuffer buf) throws IOException {
         PprofTask task = taskMetaData.getTask();
@@ -141,23 +141,18 @@ public class PprofByteBufCollectionObserver implements StreamObserver<PprofData>
         log.info("Parsing pprof file for service: {}, instance: {}", 
         taskMetaData.getServiceId(), taskMetaData.getInstanceId());
         PprofTask task = taskMetaData.getTask();
-        Map<String, FrameTree> result = PprofParser.parsePprofFile(buf);
-        if (!result.isEmpty()) {
-            Map.Entry<String, FrameTree> entry = result.entrySet().iterator().next();
-            String eventType = entry.getKey();
-            FrameTree tree = entry.getValue();
-            PprofProfilingData data = new PprofProfilingData();
-            data.setEventType(eventType);
-            data.setFrameTree(tree);
-            data.setTaskId(task.getId());
-            data.setInstanceId(taskMetaData.getInstanceId());
-            data.setUploadTime(taskMetaData.getUploadTime());
-            log.info("data eventType: {}", eventType);
-            log.info("data frameTree: {}", tree);
-            log.info("data taskId: {}", task.getId());
-            log.info("data instanceId: {}", taskMetaData.getInstanceId());
-            log.info("data uploadTime: {}", taskMetaData.getUploadTime());
-            sourceReceiver.receive(data);
-        }
+        FrameTree tree = PprofParser.dumpTree(buf);
+        PprofProfilingData data = new PprofProfilingData();
+        data.setEventType(PprofEventType.valueOfString(task.getEvents().name()));
+        data.setFrameTree(tree);
+        data.setTaskId(task.getId());
+        data.setInstanceId(taskMetaData.getInstanceId());
+        data.setUploadTime(taskMetaData.getUploadTime());
+        log.info("data eventType: {}", data.getEventType());
+        log.info("data frameTree: {}", tree);
+        log.info("data taskId: {}", task.getId());
+        log.info("data instanceId: {}", taskMetaData.getInstanceId());
+        log.info("data uploadTime: {}", taskMetaData.getUploadTime());
+        sourceReceiver.receive(data);
     }
 }

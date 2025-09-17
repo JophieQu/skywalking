@@ -16,27 +16,23 @@
  *
  */
 
-package org.apache.skywalking.oap.server.core.query.type;
+package org.apache.skywalking.oap.server.library.pprof.type;
 
+import com.google.gson.annotations.SerializedName;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import java.util.ArrayList;
+import java.util.List;
 
-@Getter
+@Data
+@NoArgsConstructor
 @AllArgsConstructor
-public enum PprofEventType {
-    CPU(0, "cpu"),
-    HEAP(1, "heap"),
-    BLOCK(2, "block"),
-    MUTEX(3, "mutex"),
-    GOROUTINE(4, "goroutine"),
-    THREADCREATE(5, "threadcreate"),
-    ALLOCS(6, "allocs");
-
-
-    private final int code;
-    private final String name;
-
-    public static PprofEventType valueOfString(String event) {
-        return PprofEventType.valueOf(event);
-    }
+public class FrameTree {
+    @SerializedName("name")
+    private String signature;
+    @SerializedName("value")
+    private long total;
+    private long self;
+    private final List<FrameTree> children = new ArrayList<>();
 }

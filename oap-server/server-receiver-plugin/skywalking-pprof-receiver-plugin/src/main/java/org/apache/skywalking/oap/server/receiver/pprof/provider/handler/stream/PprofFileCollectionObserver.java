@@ -23,18 +23,15 @@ import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import lombok.SneakyThrows;
 import org.apache.skywalking.apm.network.pprof.v10.PprofData;
-import org.apache.skywalking.apm.network.pprof.v10.PprofMetaData;
 import org.apache.skywalking.apm.network.pprof.v10.PprofCollectionResponse;
 import org.apache.skywalking.apm.network.pprof.v10.PprofProfilingStatus;
-import org.apache.skywalking.oap.server.core.analysis.IDManager;
 import org.apache.skywalking.oap.server.core.source.SourceReceiver;
 import org.apache.skywalking.oap.server.core.query.type.PprofTask;
 import org.apache.skywalking.oap.server.core.storage.profiling.pprof.IPprofTaskQueryDAO;
 import org.apache.skywalking.oap.server.core.source.PprofProfilingData;
 import org.apache.skywalking.oap.server.library.pprof.parser.PprofParser;
-import entity.FrameTree;
-import java.util.Map;
-
+import org.apache.skywalking.oap.server.library.pprof.type.FrameTree;
+import org.apache.skywalking.oap.server.core.query.type.PprofEventType;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,7 +39,6 @@ import java.nio.file.Path;
 import java.util.Objects;
 import org.apache.skywalking.oap.server.core.query.type.PprofTaskLogOperationType;
 import static org.apache.skywalking.oap.server.receiver.pprof.provider.handler.PprofServiceHandler.recordPprofTaskLog;
-
 import static org.apache.skywalking.oap.server.receiver.pprof.provider.handler.PprofServiceHandler.parseMetaData;
 
 @Slf4j
@@ -81,26 +77,17 @@ public class PprofFileCollectionObserver implements StreamObserver<PprofData> {
                     responseObserver.onNext(PprofCollectionResponse.newBuilder()
                             .setStatus(PprofProfilingStatus.PPROF_PROFILING_SUCCESS)
                             .build());
-                    
-                    log.info("Started collecting pprof data to file - service: {}, serviceInstance: {}, file: {}, size: {} bytes", 
-                            pprofData.getMetadata().getService(), pprofData.getMetadata().getServiceInstance(), 
-                            tempFile.toString(), taskMetaData.getContentSize());
                 } else {
                     responseObserver.onNext(PprofCollectionResponse.newBuilder()
                             .setStatus(PprofProfilingStatus.PPROF_TERMINATED_BY_OVERSIZE)
                             .build());
                     recordPprofTaskLog(taskMetaData.getTask(), taskMetaData.getInstanceId(), PprofTaskLogOperationType.PPROF_UPLOAD_FILE_TOO_LARGE_ERROR);
-                    log.warn("Pprof file size {} exceeds maximum allowed size {} for service: {}, serviceInstance: {}",
-                            taskMetaData.getContentSize(), pprofMaxSize, 
-                            pprofData.getMetadata().getService(), pprofData.getMetadata().getServiceInstance());
                 }
             } else {
                 responseObserver.onNext(PprofCollectionResponse.newBuilder()
                         .setStatus(PprofProfilingStatus.PPROF_EXECUTION_TASK_ERROR)
                         .build());
                 recordPprofTaskLog(taskMetaData.getTask(), taskMetaData.getInstanceId(), PprofTaskLogOperationType.EXECUTION_TASK_ERROR);
-                log.error("Received execution error from agent - service: {}, serviceInstance: {}, status: {}",
-                        pprofData.getMetadata().getService(), pprofData.getMetadata().getServiceInstance(), taskMetaData.getType());
             }
         } else if (pprofData.hasContent()) {
             if (fileOutputStream != null) {
@@ -150,7 +137,6 @@ public class PprofFileCollectionObserver implements StreamObserver<PprofData> {
         }
     }
 
-
     @SneakyThrows
     private void parseAndStorageData(PprofCollectionMetaData taskMetaData, String fileName) {
         PprofTask task = taskMetaData.getTask();
@@ -164,20 +150,21 @@ public class PprofFileCollectionObserver implements StreamObserver<PprofData> {
 
     public void parsePprofAndStorage(PprofCollectionMetaData taskMetaData, 
                                      String fileName) throws IOException {
-        PprofTask task = taskMetaData.getTask();
-        log.info("parseAndStorageData task:{}", task);
-        Map<String, FrameTree> result = PprofParser.parsePprofFile(fileName);
-        if (!result.isEmpty()) {
-            Map.Entry<String, FrameTree> entry = result.entrySet().iterator().next();
-            String eventType = entry.getKey();
-            FrameTree tree = entry.getValue();
-            PprofProfilingData data = new PprofProfilingData();
-            data.setEventType(eventType);
-            data.setFrameTree(tree);
-            data.setTaskId(task.getId());
-            data.setInstanceId(taskMetaData.getInstanceId());
-            data.setUploadTime(taskMetaData.getUploadTime());
-            sourceReceiver.receive(data);
-        }
+    log.info("Parsing pprof file for service: {}, instance: {}", 
+    taskMetaData.getServiceId(), taskMetaData.getInstanceId());
+    PprofTask task = taskMetaData.getTask();
+    FrameTree tree = PprofParser.dumpTree(fileName);
+    PprofProfilingData data = new PprofProfilingData();
+    data.setEventType(PprofEventType.valueOfString(task.getEvents().name()));
+    data.setFrameTree(tree);
+    data.setTaskId(task.getId());
+    data.setInstanceId(taskMetaData.getInstanceId());
+    data.setUploadTime(taskMetaData.getUploadTime());
+    log.info("data eventType: {}", data.getEventType());
+    log.info("data frameTree: {}", tree);
+    log.info("data taskId: {}", task.getId());
+    log.info("data instanceId: {}", taskMetaData.getInstanceId());
+    log.info("data uploadTime: {}", taskMetaData.getUploadTime());
+    sourceReceiver.receive(data);
     }
 }
